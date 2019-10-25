@@ -1,10 +1,10 @@
 import React from 'react'
 import { string } from 'prop-types'
 
-const baseURL = 'https://twitter.com/compose/tweet?text=@rgp4ss%20'
+const baseURL = 'https://twitter.com/compose/tweet?text=@rgp4ss'
 
 export const TweetText = ({ message, text }) => {
-  const encodedMessage = encodeURI(message)
+  const encodedMessage = message ? encodeURI(` ${message}`) : ''
   const href = `${baseURL}${encodedMessage}`
 
   return (
@@ -15,6 +15,6 @@ export const TweetText = ({ message, text }) => {
 }
 
 TweetText.propTypes = {
-  message: string.isRequired,
+  message: string,
   text: string.isRequired,
 }

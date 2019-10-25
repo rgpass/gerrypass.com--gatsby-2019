@@ -1,22 +1,53 @@
 ---
 date: '2019-10-25'
-title: 'Initial post'
+title: 'Replace cy.wait Magic Numbers with forEvent'
 categories:
-  - General
+  - Cypress
 ---
 
 import { TweetText } from '../../src/components/TweetText'
 
-<TweetText message="Hi" text="Tweet at me" />
+Magic Numbers. They are an anti-pattern because they are arbitrary and provide no context. This leads to confusion ("What is this number?") and fear of removing it ("I can't remove it. I don't know what it does.").
 
-# My First Post
+```js
+cy.wait(250)
+```
 
-This is a paragraph.
+Looking at this code in isolation, it's impossible to tell what we are waiting for. But this is a contrived example so let's add typical context.
 
-```ts
-const a: string = 'hi'
+```js
+cy.getByTestId('save-user').click()
+cy.wait(250)
+cy.getByTestId('select-user-1').click()
+```
 
-function myFunction(): string {
-  return 'hello world'
+Even with more context, it's still _really_ difficult to guess what we're waiting for. While [waiting for an alias](https://docs.cypress.io/api/commands/wait.html#Alias) is a better and far less error-prone solution, sometimes it doesn't make sense. For example, waiting for an animation to finish.
+
+```js
+cy.wait(250) // for animation
+```
+
+The simple fix is to add a comment. This fixes the Magic Number _here only_. Adding comments on all the `cy.wait` calls, we will quickly notice a pattern that can be refactored for a huge readability win.
+
+```js
+// test.file.js
+import { forEvent } from '../helpers'
+cy.wait(forEvent.animation)
+
+// helpers/forEvent.js
+export const forEvent = {
+  animation: 250,
 }
 ```
+
+By just adding this variable to our `helpers`, we solve the problems we listed. It's clear what we're waiting for and because of that, if we remove the animation we can remove this line with confidence.
+
+## Recall
+
+Recall is one of the best ways to optimizing learning.
+
+1. What is a Magic Number? Why is an anti-pattern?
+1. When does it make sense to use `cy.wait(time)` vs. `cy.wait(alias)`?
+1. What is one strategy for fixing Magic Numbers?
+
+<TweetText message="forEvent" text="Discuss on Twitter" />
