@@ -5,7 +5,15 @@ import styled from 'styled-components'
 import kebabCase from 'lodash/kebabCase'
 import { MDXRenderer } from 'gatsby-plugin-mdx'
 
-import { Layout, Wrapper, Header, Subline, SEO, PrevNext } from '../components'
+import {
+  Layout,
+  Wrapper,
+  Header,
+  Subline,
+  SEO,
+  PostFooter,
+  PrevNext,
+} from '../components'
 import config from '../../config'
 
 const Content = styled.article`
@@ -50,7 +58,10 @@ const PostContent = styled.div`
   margin-top: 4rem;
 `
 
-const Post = ({ pageContext: { slug, prev, next }, data: { mdx: postNode } }) => {
+const Post = ({
+  pageContext: { slug, prev, next },
+  data: { mdx: postNode },
+}) => {
   const post = postNode.frontmatter
 
   return (
@@ -74,6 +85,7 @@ const Post = ({ pageContext: { slug, prev, next }, data: { mdx: postNode } }) =>
           <PostContent>
             <MDXRenderer>{postNode.body}</MDXRenderer>
           </PostContent>
+          <PostFooter />
           <PrevNext prev={prev} next={next} />
         </Content>
       </Wrapper>
