@@ -1,0 +1,123 @@
+---
+date: '2019-10-26'
+title: 'Cypress + LaunchDarkly (or any Feature Flag Tool)'
+categories:
+  - Cypress
+---
+
+import { TweetText } from '../../src/components'
+
+Feature Flagging is incredibly powerful as it enables [canary releases](https://martinfowler.com/bliki/CanaryRelease.html). Good tools, such as [LaunchDarkly](https://launchdarkly.com), allow you (the developer) or the product manager (PM) to _easily_ toggle on who sees what features and on which environments.
+
+This is great for the product/business side, but there's a challenge for automated testing. How do you programmatically tell LaunchDarkly, "For User 1, enable Feature A. For User 2, enable Feature B"?
+
+```js
+// cypress/support/commands.js
+import * as faker from 'faker'
+
+function createUserAndLogin(user = {}) {
+  const { API_URL } = Cypress.env()
+
+  const body = {
+    email: faker.internet.email(),
+    ...user,
+  }
+
+  cy.request({
+    body,
+    method: 'POST',
+    url: `${API_URL}/users`,
+  })
+
+  // ... sign in steps
+}
+
+Cypress.Commands.add('createUserAndLogin', createUserAndLogin)
+
+// test.file.js
+cy.createUserAndLogin()
+```
+
+Let's assume you have a Cypress command of `cy.createUserAndLogin`. This allows you to share the behavior of creating a new user.
+
+> Note: If you're not using `cy.request` to create common resources and instead you're going through the UI, you're repeating common behavior and slowing down your tests. Even the most complicated authentication setups will have a way to programmatically create users.
+
+In LaunchDarkly, you can toggle a feature on or off by either (a) just doing a blanket on/off for _everyone_ or (b) customizing what is on or off by a user attribute. When you set up LaunchDarkly in your code, you typically send the user's profile (often times just the decoded JWT).
+
+The benefit of doing the latter is that you can toggle features by email. Email is ideal because you get full control over the value of the email when you create that user. Since LaunchDarkly allows you toggle features by "starts with" and you have full control of the email property, you can just prefix the email with a special string.
+
+```js
+// cypress/support/commands.js
+import * as faker from 'faker'
+
+function createUserAndLogin(
+  { emailPrefix, ...user } = { emailPrefix: 'e2e-' },
+) {
+  const { API_URL } = Cypress.env()
+
+  const email = `${emailPrefix}${faker.internet.email()}`
+  const body = {
+    email,
+    ...user,
+  }
+
+  cy.request({
+    body,
+    method: 'POST',
+    url: `${API_URL}/users`,
+  })
+
+  // ... sign in steps
+}
+
+Cypress.Commands.add('createUserAndLogin', createUserAndLogin)
+```
+
+By prefixing the emails with a common string, such as `e2e-` above, you can easily see in the database which users were created programmatically from our tests. While this _shouldn't_ matter, if you accidentally created users in the wrong database or your DevOps team is concerned about the database size for whatever environment(s) you're testing on, you can easily filter users and delete the ones related to e2e's.
+
+The additional benefit, is that we can easily prefix emails in our tests.
+
+```js
+describe('Feature A', () => {
+  describe('when feature flag enabled', () => {
+    before(() => {
+      cy.createUserAndLogin({ emailPrefix: 'e2e-FeatureA-' })
+    })
+
+    it('is visible', () => {
+      cy.get('#feature-a-button').should('exist')
+    })
+  })
+
+  describe('when feature flag disabled', () => {
+    before(() => {
+      cy.createUserAndLogin()
+    })
+
+    it('is hidden', () => {
+      cy.get('#feature-a-button').should('not.exist')
+    })
+  })
+})
+```
+
+> Note: It's much more resilient to use `cy.getByTestId` from [Cypress Testing Library](https://github.com/testing-library/cypress-testing-library) over `cy.get` however, `getByTestId().should('not.exist')` does not work as expected with that library.
+
+The last step is to add the rules in LaunchDarkly for Feature A:
+
+- By default, return `false`
+- When the user's email starts with `e2e-FeatureA`, return true
+
+This setup gives you full control over testing and allows you to confidently ship with feature flags.
+
+## Recall
+
+Recall is one of the best ways to optimize learning.
+
+1. What is feature flagging?
+1. What is a canary release?
+1. What user property do you often have full control over?
+1. What other user properties do you have full control over in your app?
+
+<br />
+<TweetText message="Cypress and LaunchDarkly" text="Discuss on Twitter" />
