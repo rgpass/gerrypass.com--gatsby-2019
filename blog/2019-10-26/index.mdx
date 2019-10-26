@@ -1,0 +1,117 @@
+---
+date: '2019-10-26'
+title: 'Sanity Check Script'
+categories:
+  - Cypress
+---
+
+import { TweetText } from '../../src/components'
+
+It's incredibly frustrating when you start a test suite, step away for a few minutes,
+then come back and see that the whole test suite failed. 0% passing. You spend a few minutes diving in to the issue just to
+find out that you forgot to turn on your server(s).
+
+Or perhaps you're running the suite and you get some random failures. You reach out to a colleague and they say, "Works on my machine." You spend minutes, maybe even hours, trying to find out why, only to discover that they added an environment variable. Assuming they did their part and added it to `.env.example`, you're left frustrated with yourself that you missed it.
+
+It only takes getting burned by this once to never want it to happen again. That's where the sanity check script comes in to play.
+
+```js
+// package.json
+{
+  // ...
+  "scripts": {
+    "cypress": "yarn cypress:sanity-check && cypress open",
+    "cypress:sanity-check": "node sanity.check.js"
+  }
+  // ...
+}
+```
+
+This will prevent Cypress' interactive mode from even starting unless the sanity check script passes.
+
+```js
+// sanity.check.js
+const shell = require('shelljs') // to make sure it runs on all operating systems
+const netcatClient = require('netcat/client') // just used to ping a server and port
+const nc = new netcatClient()
+
+// First win. If a variable is defined in `.env.example` but is not in `.env` then it will
+// exit with an error
+require('dotenv-safe').config()
+
+// These two env vars will need to be added. They only need to be added to the
+// local `.env` and not `.env.example` _unless_ you want to run this script
+// in CI.
+const { port: apiPort } = new URL(process.env.API_URL)
+const { port: webPort } = new URL(process.env.WEB_URL)
+
+async function isApiServerUp() {
+  console.log('🤞  Checking the API server')
+  return await scanPort({ name: 'API server', port: apiPort })
+}
+
+async function isWebServerUp() {
+  console.log('🤞  Checking the Web server')
+  return await scanPort({ name: 'Web server', port: webPort })
+}
+
+function scanPort({ name, port }) {
+  return new Promise(resolve => {
+    // nc.scan requires a range of ports, but we only want to search for one
+    nc.addr(hostname).scan(`${port}-${port}`, ports => {
+      const isDown = ports[port] === 'closed'
+
+      if (isDown) {
+        shell.echo(`☠️  ${name} not running on localhost:${port}`)
+      } else {
+        shell.echo(`✅  ${name} is running on localhost:${port}`)
+      }
+      resolve(!isDown)
+    })
+  })
+}
+
+async function sanityCheck() {
+  const isApiGood = await isApiServerUp()
+  const isWebGood = await isWebServerUp()
+
+  // Second win. If both of these don't pass, we want to exit with 1 so that the
+  // next script we outlined in `package.json` (`cypress open`) does not run
+  // Note: Shell script exit codes: 0 == Success, 1 (or any non-0 number) == Failure
+  const exitCode = isApiGood && isWebGood ? 0 : 1
+
+  shell.exit(exitCode)
+}
+
+sanityCheck()
+```
+
+With this in place, if the API server is up but the Web server is not, running `yarn cypress` will show us:
+
+```
+🤞  Checking the API server
+✅  API server is running on localhost:4000
+🤞  Checking the Web server
+☠️  Web server not running on localhost:8080
+```
+
+You can now run `yarn cypress` and get immediate feedback on the major pieces. You can start the test suite and step away with confidence.
+
+As a bonus, add a [PR checklist](https://help.github.com/en/github/building-a-strong-community/creating-a-pull-request-template-for-your-repository) item that includes:
+
+```
+- [ ] If an env var was added, was it added to `.env.example`
+```
+
+Doing this will help prevent the scenario where another developer added an env var to `.env` and forgot to add it `.env.example`. Assuming that checkbox catches their/your oversight 100% of the time (🤞) then the sanity check script will handle it from there.
+
+## Recall
+
+Recall is one of the best ways to optimizing learning.
+
+1. What is the benefit of having a sanity check script?
+1. What exit code represents success? What exit code represents failure?
+1. What is the benefit of using `dotenv-safe` over `dotenv`?
+
+<br />
+<TweetText message="Sanity Check Script" text="Discuss on Twitter" />
