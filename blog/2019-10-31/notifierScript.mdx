@@ -1,0 +1,137 @@
+---
+date: '2019-10-31'
+title: 'Notifier Script'
+categories:
+  - Productivity
+---
+
+import { TweetText } from '../../src/components'
+
+Sometimes we have CLI processes that take a long time.
+
+> Long time: any length of time longer than one's attention span
+
+When we're going about our workflow, we are hopefully working on the highest priority task. If that highest priority task has a long-running process, we want to be notified immediately when that long-running process finishes. There are a few ways we can do this.
+
+## Strategy 1: The simple bell
+
+```bash
+# Run this command in your (bash) CLI then change tabs/apps
+sleep 2 && echo -e "\a"
+```
+
+If you ran this in OSX's Terminal, you'll see the icon jump in your app bar. If you ran this with iTerm2, you'll see a OS notification.
+
+**Note:** If you're using Terminal, you should switch to [iTerm2](https://www.iterm2.com/). It's as simple as Terminal, but with lots of quality-of-life features (ex. multiple tabs, window splitting, customization).
+
+You'll see you get a OS notification, but you'll it says `Session sleep (sleep) #1 rang a bell!` That's not very helpful since it doens't give us any context.
+
+## Strategy 2: Voice FTW
+
+```bash
+# Run this command in your (bash) CLI
+say 'done'
+```
+
+Now go ahead and make the computer say funny things for the next 10min. This article will be still be here. 😄
+
+This was great tool I used often enough that I added an alias for it. However, I found it to scare me sometimes and it would scare coworkers when were pair-programming almost 100% of the time. As funny as the first few times were and even when it's Halloween, being spooked is disrupting and causes us to get distracted.
+
+## Strategy 3: Custom scripts
+
+What we really want is a OS notification with custom text to tell us what's going on. This way if we're running multiple long-running processes in parallel, or sometimes we run one and not the other, we can get appropriate messages.
+
+This is where [node-notifier](https://www.npmjs.com/package/node-notifier) comes in handy. To accomplish our goal, we just need a basic title and message. However, [node-notifier](https://www.npmjs.com/package/node-notifier) offers tons of customization.
+
+So let's make a simple npm package locally and call those scripts.
+
+**Note:** I use [Yarn](https://yarnpkg.com/lang/en/) instead of [npm](https://www.npmjs.com/). All the Yarn commands I'm running have an equivalent npm command.
+
+```bash
+# Make a folder -- you choose where you want these scripts to live
+# I chose ~/scripts/notifiers
+cd ~
+mkdir scripts
+cd scripts
+mkdir notifiers
+cd notifiers
+
+# Initialize the project and answer every question blank
+yarn init --yes
+
+# Add the only dependency we need
+yarn add node-notifier
+
+# Create our first script file. I'm choosing a generic one for long processes
+touch long-process.js
+
+# Open it up in your editor of choice
+code .
+```
+
+Inside of `~/scripts/notifiers/long-process.js`:
+
+```js
+var notifier = require('node-notifier')
+
+notifier.notify({
+  title: 'Process Done',
+  message: 'The long-running process has finished.',
+})
+```
+
+That's all the code. Try it out by running it in your CLI.
+
+```bash
+# Run this command in your (bash) CLI then change tabs/apps
+sleep 2 && node ~/scripts/notifiers/long-process.js
+```
+
+**Note:** If you run it directly without the `sleep 2`, you may notice that it hangs for a few seconds after executing. I have been using this script for months and never found this to be an issue.
+
+## Aliases
+
+Lastly, we want these to be easily called. I only want to type two or three characters to have these get queued up. That's where aliases, aka bash shortcuts, come into play.
+
+In your CLI and your shell of choice, you'll have one of these files. Try to open each one of these until you get a file that exists.
+
+```bash
+# Stop when you open one and it has content in it
+code ~/.zshrc
+code ~/.bashrc
+code ~/.bash_profile
+```
+
+> Tidbit: The `rc` in `.zshrc`/`.bashrc` stands for `run commands`
+
+Now that we have our run commands file open, let's add some aliases. Near the bottom, or really whereever, as long as it's after where `node` is defined and set:
+
+```bash
+# I chose `pd` as short-hand for `print done`
+alias pd="node ~/scripts/notifiers/long-process.js"
+# I chose `sd` as short-hand for `say done`
+alias sd="say 'done'"
+```
+
+To have these take effect, you can either open a new CLI tab or you can run `source ~/.zshrc` (or whatever the file was above that you edited).
+
+To test it, just run in your CLI:
+
+```bash
+pd
+sd
+```
+
+I use this script at least 20x a day at my job. We have pre-commit hooks that run lint, type-check, run tests, etc. that take ~20sec to run. We also have some DevOps scripts that take ~20min to run.
+
+Without being notified, I may commit, go and look at other sites, answer Slack messages, and then come back, see that a test failed, and then have to rebuild the mental context. With this notifier script, I am alerted in just a few seconds that everything went well or didn't, so my mental context is still fresh.
+
+## Recall
+
+Recall is one of the best ways to optimize learning.
+
+1. What are the benefits of having a notifier script?
+1. What does `rc` stand for in terms of `bashrc` or `zshrc`?
+
+<br />
+<TweetText message="Notifier Script" text="Discuss on Twitter" />
