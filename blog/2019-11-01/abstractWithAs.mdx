@@ -1,0 +1,210 @@
+---
+date: '2019-11-01'
+title: 'Variables with Abstract-With-As'
+categories:
+  - Cypress
+---
+
+import { TweetText } from '../../src/components'
+
+[Cypress][cypress]' documentation on [Variables and Aliases][article] does a great job explaing _all_ the options. What I'd like to propose is the _best_ option.
+
+I have gone back and forth with how to set and get variables, going from OK, to terrible, to great. If you read the [Variables and Aliases][article] article, you'll see that the Cypress team has done a great job of explaining what _not_ to do and all of the options of what you _could_ do.
+
+Being someone who likes to challenge assumptions, I tried all the anti-patterns anyway and found out through pain and struggle that they were right about what _not_ to do. In fact, I found _new_ ways to do it poorly! But on the plus side, I found, what I believe is, the _best_ way &mdash; the Abstract-With-As pattern.
+
+## Cypress Aliases
+
+If you haven't already, you'll definitely need to read the [Aliases][aliases] docs.
+
+> I strongly recommend _against_ the `this.myVariable` syntax. Not only is it incompatible with fat-arrow syntax, it adds the whole confusion of what `this` is. If you're a JavaScript pro, `this` is simple, but that is the [Curse of Knowledge][curse of knowledge] speaking. `this` is really confusing for new JS developers and even has two chapters dedicated to it in [one of the You Don't Know JavaScript books][ydkjs].
+
+Here's an example of Cypress Alias in action.
+
+```js
+describe('aliases', () => {
+  before(() => {
+    // storing `someValue` to the alias `someVariable`
+    cy.wrap('someValue').as('someVariable')
+  })
+
+  it('allows for accessing values', () => {
+    // unwrap the alias, then log it
+    cy.get('@someVariable').then(someVariable => cy.log(someVariable))
+  })
+})
+```
+
+## Abstract-With-As
+
+Let's cover an example through a Random Fact App. The app we're testing displays a new random fact each time we press a "Get Fact" button. The only thing we want to test is that a _different_ fact comes up each time.
+
+```js
+// test-file.js
+describe('Random Fact App', () => {
+  before(() => {
+    // Not a real site... yet :)
+    cy.visit('http://www.randomfactapp.com')
+
+    cy.get('#generate-fact').click()
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as('firstFact'))
+
+    cy.get('#generate-fact').click()
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as('secondFact'))
+
+    cy.get('#generate-fact').click()
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as('thirdFact'))
+  })
+
+  it('displays a different fact each time', () => {
+    cy.get('@firstFact').then(firstFact => {
+      cy.get('@secondFact').then(secondFact => {
+        expect(secondFact).to.not.eq(firstFact)
+      })
+    })
+
+    cy.get('@secondFact').then(secondFact => {
+      cy.get('@thirdFact').then(thirdFact => {
+        expect(thirdFact).to.not.eq(secondFact)
+      })
+    })
+
+    cy.get('@firstFact').then(firstFact => {
+      cy.get('@thirdFact').then(thirdFact => {
+        expect(thirdFact).to.not.eq(firstFact)
+      })
+    })
+  })
+})
+```
+
+If this is your first time looking at this code or you're fairly new to Cypress, you probably went, "OK, so then they press the button, then they get the text I think then they wrap it (what does that mean?), then they're comparing I think?" That's not good. Well written tests make it obvious what we're testing and what we're expecting.
+
+Let's first refactor the assertions so it's easier to read.
+
+```js
+// test-file.js
+describe('Random Fact App', () => {
+  before(() => {
+    cy.visit('http://www.randomfactapp.com')
+
+    cy.get('#generate-fact').click()
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as('firstFact'))
+
+    cy.get('#generate-fact').click()
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as('secondFact'))
+
+    cy.get('#generate-fact').click()
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as('thirdFact'))
+  })
+
+  it('displays a different fact each time', () => {
+    cy.assertAliasesNotEqual('firstFact', 'secondFact')
+    cy.assertAliasesNotEqual('secondFact', 'thirdFact')
+    cy.assertAliasesNotEqual('firstFact', 'thirdFact')
+  })
+})
+
+// commands.js
+Cypress.Commands.add('assertAliasesNotEqual', assertAliasesNotEqual)
+
+function assertAliasesNotEqual(alias1, alias2) {
+  cy.get(`@${alias1}`).then(value1 => {
+    cy.get(`@${alias2}`).then(value2 => {
+      expect(value1).to.not.eq(value2)
+    })
+  })
+}
+```
+
+Now we need to abstract the idea of "generating a new fact and setting it to a variable (aka alias)."
+
+```js
+// test-file.js
+describe('Random Fact App', () => {
+  before(() => {
+    cy.visit('http://www.randomfactapp.com')
+
+    // Abstract-With-As for the win!
+    cy.generateFact({ as: 'firstFact' })
+    cy.generateFact({ as: 'secondFact' })
+    cy.generateFact({ as: 'thirdFact' })
+  })
+
+  it('displays a different fact each time', () => {
+    cy.assertAliasesNotEqual('firstFact', 'secondFact')
+    cy.assertAliasesNotEqual('secondFact', 'thirdFact')
+    cy.assertAliasesNotEqual('firstFact', 'thirdFact')
+  })
+})
+
+// commands.js
+Cypress.Commands.add('assertAliasesNotEqual', assertAliasesNotEqual)
+Cypress.Commands.add('generateFact', generateFact)
+
+function assertAliasesNotEqual(alias1, alias2) {
+  cy.get(`@${alias1}`).then(value1 => {
+    cy.get(`@${alias2}`).then(value2 => {
+      expect(value1).to.not.eq(value2)
+    })
+  })
+}
+
+function generateFact({ as }) {
+  cy.get('#generate-fact').click()
+  cy.get('#fact')
+    .invoke('text')
+    .then(text => cy.wrap(text).as(as))
+}
+```
+
+Now, this is all good, but what if want to test that the text of `#generate-fact` _initially_ is "Get Fact" and then after that it's "Get Another Fact". We won't _care_ about the fact text and thus we shouldn't _need_ to put in an alias. We can fix that with just a couple of lines.
+
+```js
+// commands.js
+function generateFact({ as } = {}) {
+  cy.get('#generate-fact').click()
+
+  if (as) {
+    cy.get('#fact')
+      .invoke('text')
+      .then(text => cy.wrap(text).as(as))
+  }
+}
+```
+
+Comparing the original `before` with the last `before`, we have:
+
+- Significantly increased readability
+- Converted from imperative to declarative programming
+- DRY'd up our common code
+- Increased flexibility by optionally allowing aliases
+
+## Recall
+
+Recall is one of the best ways to optimize learning.
+
+1. Describe Abstract-With-As.
+1. In your own words, what are the benefits of Abstract-With-As?
+1. Implement Abstract-With-As in one of your tests.
+
+<br />
+<TweetText message="Abstract-With-As" text="Discuss on Twitter" />
+
+[aliases]: https://docs.cypress.io/guides/core-concepts/variables-and-aliases.html#Aliases
+[article]: https://docs.cypress.io/guides/core-concepts/variables-and-aliases.html
+[curse of knowledge]: https://hbr.org/2006/12/the-curse-of-knowledge
+[cypress]: https://www.cypress.io
+[ydkjs]: https://github.com/getify/You-Dont-Know-JS/tree/1st-ed/this%20%26%20object%20prototypes
